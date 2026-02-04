@@ -1,3 +1,6 @@
+
+![Shastas Projector](screenshots/shastas_projector.png)
+
 # Shasta's Projector (v1.0)
 
 A cross-platform desktop overlay app for streamers who want chat and visual widgets **on top of their game** without keeping a browser open.
