@@ -4,11 +4,9 @@ A cross-platform desktop overlay app for streamers who want chat and visual widg
 
 Built for streamers who play in borderless or windowed fullscreen and want a lightweight, always-on-top overlay that stays out of the way during gameplay.
 
-<<<<<<< HEAD
-=======
+
 Github: https://github.com/ShastaWaffles/Shastas-Projector/
 
->>>>>>> 29b68fe (Initial release v1.0)
 ---
 
 ## Features
@@ -45,7 +43,10 @@ For reliable overlays, use **borderless** or **windowed fullscreen** modes.
 
 ## Screenshots / Demo
 
-*(Coming soon — screenshots and demo video will be added here.)*
+![Control Panel Dark Mode](screenshots/shastasprojector-1-darkmode.png)
+
+![Sleepychat Minecraft Overlay Example](screenshots/sleepychat-overlay-example.png)
+
 
 ---
 
