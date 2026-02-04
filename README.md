@@ -48,6 +48,8 @@ For reliable overlays, use **borderless** or **windowed fullscreen** modes.
 
 ![Control Panel Dark Mode](screenshots/shastasprojector-1-darkmode.png)
 
+![Empty Overlay Screenshot](screenshots/projector-empty-overlay.png)
+
 ![Sleepychat Minecraft Overlay Example](screenshots/sleepychat-overlay-example.png)
 
 
