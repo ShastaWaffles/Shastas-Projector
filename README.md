@@ -8,7 +8,9 @@ A cross-platform desktop overlay app for streamers who want chat and visual widg
 Built for streamers who play in borderless or windowed fullscreen and want a lightweight, always-on-top overlay that stays out of the way during gameplay.
 
 
-Github: https://github.com/ShastaWaffles/Shastas-Projector/
+### [Download for Windows](https://github.com/ShastaWaffles/Shastas-Projector/releases/download/v1.0.0/ShastasProjector-v1.0.0-WINDOWS.zip)
+
+### [Download for Mac OS](https://github.com/ShastaWaffles/Shastas-Projector/releases/download/v1.0.0-macOS/ShastasProjectorV1.0.0-macOS.zip)
 
 ---
 
