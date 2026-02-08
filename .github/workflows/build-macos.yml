@@ -1,0 +1,42 @@
+name: Build macOS (PyInstaller)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build (matches README macOS/Linux command)
+        run: |
+          pyinstaller --name "ShastasProjector" --windowed --onedir \
+            --icon overlay_app/resources/projectoricon.png \
+            --add-data "overlay_app/resources:overlay_app/resources" \
+            -m overlay_app.app
+
+      - name: Zip the .app for download
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "dist/ShastasProjector.app" "ShastasProjector-mac.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShastasProjector-mac
+          path: ShastasProjector-mac.zip
