@@ -36,6 +36,20 @@ Built for streamers who play in borderless or windowed fullscreen and want a lig
 - Starts clean on first run (no default overlays)
 - Simplified UI (removed overlay notes system)
 
+## Themes to choose from:
+- Dark
+- Light
+- Ember
+- Sea Blue
+- Emerald
+- Cherry Blossom
+- Pastel Dreams
+- Neon Pink
+- Fashionably Late
+- Fire Nation
+- Galaxy
+- Ducky
+
 ---
 
 ## Best Use for Streamers
