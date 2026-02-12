@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 from PySide6.QtCore import QAbstractNativeEventFilter, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
@@ -237,14 +238,236 @@ class WindowsHotkeyManager(QAbstractNativeEventFilter):
         binding["registered"] = False
 
 
+class HotkeyManager(Protocol):
+    def bind(self, name: str, hotkey: str, callback: Callable[[], None], enabled: bool = True) -> str: ...
+    def unregister(self, name: str) -> None: ...
+    def set_enabled(self, name: str, enabled: bool) -> bool: ...
+    def is_enabled(self, name: str) -> bool: ...
+    def close(self) -> None: ...
+
+
+class MacOSHotkeyManager:
+    """Registers global hotkeys on macOS via pynput and dispatches callbacks."""
+
+    _MODIFIER_TOKENS = {
+        "ALT": ("Alt", "<alt>"),
+        "OPTION": ("Alt", "<alt>"),
+        "CTRL": ("Ctrl", "<ctrl>"),
+        "CONTROL": ("Ctrl", "<ctrl>"),
+        "SHIFT": ("Shift", "<shift>"),
+        "CMD": ("Cmd", "<cmd>"),
+        "COMMAND": ("Cmd", "<cmd>"),
+        "META": ("Cmd", "<cmd>"),
+        "WIN": ("Cmd", "<cmd>"),
+        "WINDOWS": ("Cmd", "<cmd>"),
+    }
+
+    _KEY_TOKENS = {
+        "SPACE": ("Space", "<space>"),
+        "TAB": ("Tab", "<tab>"),
+        "ENTER": ("Enter", "<enter>"),
+        "RETURN": ("Enter", "<enter>"),
+        "ESC": ("Esc", "<esc>"),
+        "ESCAPE": ("Esc", "<esc>"),
+        "BACKSPACE": ("Backspace", "<backspace>"),
+        "DELETE": ("Delete", "<delete>"),
+        "INSERT": ("Insert", "<insert>"),
+        "HOME": ("Home", "<home>"),
+        "END": ("End", "<end>"),
+        "PGUP": ("PgUp", "<page_up>"),
+        "PAGEUP": ("PgUp", "<page_up>"),
+        "PGDN": ("PgDn", "<page_down>"),
+        "PAGEDOWN": ("PgDn", "<page_down>"),
+        "LEFT": ("Left", "<left>"),
+        "UP": ("Up", "<up>"),
+        "RIGHT": ("Right", "<right>"),
+        "DOWN": ("Down", "<down>"),
+    }
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._keyboard = None
+        self._listener = None
+        self._bindings: dict[str, dict[str, object]] = {}
+        if sys.platform != "darwin":
+            return
+        try:
+            from pynput import keyboard
+
+            self._keyboard = keyboard
+            self._listener = keyboard.Listener(
+                on_press=self._on_press,
+                on_release=self._on_release,
+            )
+            self._listener.daemon = True
+            self._listener.start()
+        except Exception:
+            self._keyboard = None
+            self._listener = None
+
+    def bind(self, name: str, hotkey: str, callback: Callable[[], None], enabled: bool = True) -> str:
+        parsed = self._parse_hotkey(hotkey)
+        if parsed is None or self._keyboard is None:
+            previous = self._bindings.get(name)
+            return str(previous.get("hotkey", "F8")) if previous else "F8"
+
+        combo_expr, normalized = parsed
+        try:
+            combo = self._keyboard.HotKey.parse(combo_expr)
+        except Exception:
+            previous = self._bindings.get(name)
+            return str(previous.get("hotkey", "F8")) if previous else "F8"
+
+        def _activate() -> None:
+            with self._lock:
+                binding = self._bindings.get(name)
+                if binding is None or not bool(binding.get("enabled", False)):
+                    return
+                cb = binding.get("callback")
+            if callable(cb):
+                cb()
+
+        with self._lock:
+            self._bindings[name] = {
+                "hotkey": normalized,
+                "enabled": bool(enabled),
+                "callback": callback,
+                "hotkey_obj": self._keyboard.HotKey(combo, _activate),
+            }
+        return normalized
+
+    def unregister(self, name: str) -> None:
+        with self._lock:
+            self._bindings.pop(name, None)
+
+    def set_enabled(self, name: str, enabled: bool) -> bool:
+        with self._lock:
+            binding = self._bindings.get(name)
+            if binding is None:
+                return False
+            binding["enabled"] = bool(enabled)
+        return True
+
+    def is_enabled(self, name: str) -> bool:
+        with self._lock:
+            binding = self._bindings.get(name)
+            if binding is None:
+                return False
+            return bool(binding.get("enabled", False))
+
+    def close(self) -> None:
+        with self._lock:
+            self._bindings.clear()
+            listener = self._listener
+            self._listener = None
+        if listener is not None:
+            try:
+                listener.stop()
+            except Exception:
+                pass
+
+    def _on_press(self, key) -> None:
+        listener = self._listener
+        if listener is None:
+            return
+        try:
+            canonical = listener.canonical(key)
+        except Exception:
+            return
+        with self._lock:
+            bindings = list(self._bindings.values())
+        for binding in bindings:
+            if not bool(binding.get("enabled", False)):
+                continue
+            hotkey_obj = binding.get("hotkey_obj")
+            if hotkey_obj is not None:
+                try:
+                    hotkey_obj.press(canonical)
+                except Exception:
+                    continue
+
+    def _on_release(self, key) -> None:
+        listener = self._listener
+        if listener is None:
+            return
+        try:
+            canonical = listener.canonical(key)
+        except Exception:
+            return
+        with self._lock:
+            bindings = list(self._bindings.values())
+        for binding in bindings:
+            if not bool(binding.get("enabled", False)):
+                continue
+            hotkey_obj = binding.get("hotkey_obj")
+            if hotkey_obj is not None:
+                try:
+                    hotkey_obj.release(canonical)
+                except Exception:
+                    continue
+
+    def _parse_hotkey(self, hotkey: str) -> Optional[tuple[str, str]]:
+        parts = [p.strip().upper() for p in hotkey.replace("-", "+").split("+") if p.strip()]
+        if not parts:
+            return None
+
+        mod_pretty: list[str] = []
+        mod_expr: list[str] = []
+        key_pretty: Optional[str] = None
+        key_expr: Optional[str] = None
+
+        for part in parts:
+            modifier = self._MODIFIER_TOKENS.get(part)
+            if modifier is not None:
+                pretty, expr = modifier
+                if expr in mod_expr:
+                    continue
+                mod_pretty.append(pretty)
+                mod_expr.append(expr)
+                continue
+            if key_expr is not None:
+                return None
+            if len(part) == 1 and part.isalpha():
+                key_pretty = part
+                key_expr = part.lower()
+                continue
+            if len(part) == 1 and part.isdigit():
+                key_pretty = part
+                key_expr = part
+                continue
+            if part.startswith("F") and part[1:].isdigit():
+                fn = int(part[1:])
+                if 1 <= fn <= 24:
+                    key_pretty = f"F{fn}"
+                    key_expr = f"<f{fn}>"
+                    continue
+                return None
+            special = self._KEY_TOKENS.get(part)
+            if special is not None:
+                key_pretty, key_expr = special
+                continue
+            return None
+
+        if key_expr is None or key_pretty is None:
+            return None
+
+        normalized = "+".join([*mod_pretty, key_pretty])
+        expression = "+".join([*mod_expr, key_expr])
+        return expression, normalized
+
+
 def _create_qapp() -> QApplication:
     if sys.platform == "win32":
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ShastasProjector.App")
 
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    # High-DPI scaling is default in Qt 6; AA_EnableHighDpiScaling/AA_UseHighDpiPixmaps are deprecated there
+    from PySide6 import __version__ as _pyside_ver
+    _major = int(_pyside_ver.split(".")[0]) if _pyside_ver else 6
+    if _major < 6:
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
     app = QApplication.instance()
     if app is None:
@@ -295,7 +518,7 @@ def main() -> None:
     app.setQuitOnLastWindowClosed(False)
 
     config: AppConfig = load_config()
-    hotkey_manager: Optional[WindowsHotkeyManager] = None
+    hotkey_manager: Optional[HotkeyManager] = None
     tray: Optional[QSystemTrayIcon] = None
 
     def on_config_changed(new_config: AppConfig) -> None:
@@ -304,6 +527,9 @@ def main() -> None:
     def on_hotkey_changed(hotkey: str) -> str:
         if hotkey_manager is None:
             return hotkey
+        if not hotkey:
+            hotkey_manager.unregister("chat_focus")
+            return ""
         return hotkey_manager.bind("chat_focus", hotkey, panel.focus_chat_input_hotkey, config.focus_hotkey_enabled)
 
     def on_hotkey_enabled_changed(enabled: bool) -> bool:
@@ -326,6 +552,19 @@ def main() -> None:
             True,
         )
 
+    def on_click_through_hotkey_changed(hotkey: str) -> str:
+        if hotkey_manager is None:
+            return hotkey
+        if not hotkey:
+            hotkey_manager.unregister("click_through")
+            return ""
+        return hotkey_manager.bind(
+            "click_through",
+            hotkey,
+            panel.toggle_click_through_hotkey,
+            True,
+        )
+
     def show_panel() -> None:
         panel.show()
         panel.raise_()
@@ -343,23 +582,33 @@ def main() -> None:
         on_hotkey_changed,
         on_hotkey_enabled_changed,
         on_overlay_hotkey_changed,
+        on_click_through_hotkey_changed,
         request_quit,
     )
-    panel.resize(640, 480)
+    panel.resize(980, 620)
     panel.show()
     if sys.platform == "win32":
         hotkey_manager = WindowsHotkeyManager()
         app.installNativeEventFilter(hotkey_manager)
+    elif sys.platform == "darwin":
+        hotkey_manager = MacOSHotkeyManager()
 
-        config.chat_hotkey = hotkey_manager.bind(
-            "chat_focus",
-            config.chat_hotkey,
-            panel.focus_chat_input_hotkey,
-            config.focus_hotkey_enabled,
+    if hotkey_manager is not None:
+
+        if config.chat_hotkey:
+            config.chat_hotkey = hotkey_manager.bind(
+                "chat_focus",
+                config.chat_hotkey,
+                panel.focus_chat_input_hotkey,
+                config.focus_hotkey_enabled,
+            )
+            config.focus_hotkey_enabled = hotkey_manager.is_enabled("chat_focus")
+
+        active_profile = next(
+            (p for p in config.profiles if p.id == config.active_profile_id),
+            config.profiles[0] if config.profiles else None,
         )
-        config.focus_hotkey_enabled = hotkey_manager.is_enabled("chat_focus")
-
-        for overlay_cfg in config.overlays:
+        for overlay_cfg in (active_profile.overlays if active_profile else []):
             if overlay_cfg.toggle_hotkey:
                 overlay_cfg.toggle_hotkey = hotkey_manager.bind(
                     f"overlay:{overlay_cfg.id}",
@@ -367,8 +616,16 @@ def main() -> None:
                     lambda oid=overlay_cfg.id: panel.toggle_overlay_visibility_by_id(oid),
                     True,
                 )
+        if config.click_through_hotkey:
+            config.click_through_hotkey = hotkey_manager.bind(
+                "click_through",
+                config.click_through_hotkey,
+                panel.toggle_click_through_hotkey,
+                True,
+            )
         panel.set_hotkey_text(config.chat_hotkey)
         panel.set_focus_hotkey_enabled(config.focus_hotkey_enabled)
+        panel.set_click_through_hotkey_text(config.click_through_hotkey)
         save_config(config)
 
     if QSystemTrayIcon.isSystemTrayAvailable():
@@ -408,4 +665,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

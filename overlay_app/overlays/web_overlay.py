@@ -4,10 +4,25 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QResizeEvent
-from PySide6.QtWidgets import QVBoxLayout, QWidget, QSizeGrip
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
-from .base_overlay import BaseOverlayWindow, OverlayDragHeader
+from .base_overlay import BaseOverlayWindow, OverlayDragHandle
+
+
+class _OverlayWebPage(QWebEnginePage):
+    """Web page that suppresses JS console output so third-party page errors don't flood the terminal."""
+
+    def javaScriptConsoleMessage(
+        self,
+        level: "QWebEnginePage.JavaScriptConsoleMessageLevel",
+        message: str,
+        line_number: int,
+        source_id: str,
+    ) -> None:
+        # Suppress: React #418, TikTok connector errors, etc. come from the loaded page, not our app.
+        pass
 
 
 class WebOverlayWindow(BaseOverlayWindow):
@@ -19,27 +34,28 @@ class WebOverlayWindow(BaseOverlayWindow):
         self._url = url
         self._zoom = 1.0
         self._web_view = QWebEngineView(self)
+        page = _OverlayWebPage(QWebEngineProfile.defaultProfile(), self._web_view)
+        page.setBackgroundColor(QColor(0, 0, 0, 0))
+        self._web_view.setPage(page)
         self._web_view.setMouseTracking(True)
         self._web_view.installEventFilter(self)
         self._web_view.setAttribute(Qt.WA_TranslucentBackground, True)
         self._web_view.setStyleSheet("background: transparent;")
-        self._web_view.page().setBackgroundColor(QColor(0, 0, 0, 0))
         self._web_view.loadFinished.connect(self._on_load_finished)
 
         root_layout = QVBoxLayout()
-        root_layout.setContentsMargins(0, 0, 0, 0)
+        m = BaseOverlayWindow.RESIZE_MARGIN
+        root_layout.setContentsMargins(m, m, m, m)
         root_layout.setSpacing(0)
         root_layout.addWidget(self._web_view)
         self.setLayout(root_layout)
 
-        header = OverlayDragHeader(self, parent=self)
-        self.register_header_widget(header)
-
-        self._size_grip = QSizeGrip(self)
-        self.register_resize_handle_widget(self._size_grip)
+        self._drag_handle = OverlayDragHandle(self, parent=self)
+        self._drag_handle.move(m + 6, m + 6)
+        self._drag_handle.raise_()
 
         self.load_url(url)
-        self._position_chrome()
+        self._raise_chrome()
 
     def load_url(self, url: str) -> None:
         self._url = url
@@ -148,18 +164,37 @@ class WebOverlayWindow(BaseOverlayWindow):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        self._position_chrome()
+        self._raise_chrome()
+        if hasattr(self, "_drag_handle") and self._drag_handle is not None:
+            m = BaseOverlayWindow.RESIZE_MARGIN
+            self._drag_handle.move(m + 6, m + 6)
+            self._drag_handle.raise_()
 
-    def _position_chrome(self) -> None:
-        if self._header_widget is not None:
-            self._header_widget.move(6, 6)
-            self._header_widget.raise_()
-        if self._resize_handle_widget is not None:
-            margin = 2
-            x = max(0, self.width() - self._resize_handle_widget.width() - margin)
-            y = max(0, self.height() - self._resize_handle_widget.height() - margin)
-            self._resize_handle_widget.move(x, y)
-            self._resize_handle_widget.raise_()
+    def _raise_chrome(self) -> None:
+        """Keep drag handle above the web view so it receives clicks."""
+        if hasattr(self, "_drag_handle") and self._drag_handle is not None:
+            self._drag_handle.raise_()
+
+    def _apply_interaction_state(self) -> None:
+        super()._apply_interaction_state()
+        interactive = not self._locked and not self.is_click_through()
+        if hasattr(self, "_drag_handle") and self._drag_handle is not None:
+            self._drag_handle.setEnabled(interactive)
+            self._drag_handle.setVisible(interactive)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._raise_chrome()
+
+    def pan_content(self, dx: int, dy: int) -> None:
+        """Pan the web page by (dx, dy) pixels. Ctrl+drag inside overlay to use."""
+        self._web_view.page().runJavaScript(f"window.scrollBy({dx}, {dy})")
+
+    def fit_to_overlay(self) -> None:
+        """Scroll to top and reset view so content fits in the overlay."""
+        self._web_view.page().runJavaScript("window.scrollTo(0, 0)")
+        if self.on_state_changed:
+            self.on_state_changed()
 
     @property
     def url(self) -> str:

@@ -5,3 +5,5 @@ build/
 dist/
 *.spec
 *.md
+!ShastasProjector.spec
+overlay_app/resources/fonts/README.txt
