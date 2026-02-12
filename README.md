@@ -1,38 +1,40 @@
 
 ![Shastas Projector](screenshots/shastas_projector.png)
 
-# Shasta's Projector (v1.0)
+# Shasta's Projector (v2.0.0)
 
 A cross-platform desktop overlay app for streamers who want chat and visual widgets **on top of their game** without keeping a browser open.
 
 Built for streamers who play in borderless or windowed fullscreen and want a lightweight, always-on-top overlay that stays out of the way during gameplay.
 
 
-### [Download for Windows](https://github.com/ShastaWaffles/Shastas-Projector/releases/download/v1.0.0/ShastasProjector-v1.0.0-WINDOWS.zip)
-
-### [Download for Mac OS](https://github.com/ShastaWaffles/Shastas-Projector/releases/download/v1.0.0-macOS/ShastasProjectorV1.0.0-macOS.zip)
-
 ---
+## Features of v2.0.0
 
-## Features
-
-- Multiple overlays (web or image)
+- Region screen capture overlays
+- Window capture overlays
+- Window picker for selecting app/game windows
+- Window crop picker for precise capture areas
+- Overlay profiles (create, rename, delete, switch)
+- Move overlays between profiles
+- Duplicate overlays quickly
 - Per-overlay controls:
-  - Name
-  - Source
-  - Size
+  - Visibility
+  - Lock / unlock
+  - Click-through
   - Opacity
   - Zoom
-  - Lock
-  - Visibility
-  - Click-through
-- Per-overlay global hotkey to show/hide
-- Global chat-focus hotkey (customizable + enable/disable)
-- Click-through mode for gameplay
-- Lock mode hides drag/resize chrome
-- System tray support (hide/show/quit from tray menu)
-- Light and dark control panel themes
-- Persistent config (overlays + settings saved per user)
+  - Size / position
+- Per-overlay visibility hotkeys
+- Chat focus hotkey
+- Click-through toggle hotkey
+- macOS global hotkey support
+- Improved system tray controls (open/hide/quit)
+- Cross-platform support for Windows and macOS
+- Cross-platform CI builds (Windows + macOS)
+- PyInstaller packaging improvements for multi-OS builds
+- Starts clean on first run (no default overlays)
+- Simplified UI (removed overlay notes system)
 
 ---
 
@@ -48,7 +50,10 @@ For reliable overlays, use **borderless** or **windowed fullscreen** modes.
 
 ## Screenshots / Demo
 
-![Control Panel Dark Mode](screenshots/shastasprojector-1-darkmode.png)
+<img width="1095" height="698" alt="image" src="https://github.com/user-attachments/assets/5b8332f9-5871-41f3-a87c-fb6fa37d9dae" />
+
+<img width="390" height="424" alt="image" src="https://github.com/user-attachments/assets/645b9501-daf9-4653-a022-435f9a25fe93" />
+
 
 ![Empty Overlay Screenshot](screenshots/projector-empty-overlay.png)
 
@@ -70,15 +75,6 @@ For reliable overlays, use **borderless** or **windowed fullscreen** modes.
 pip install -r requirements.txt
 python -m overlay_app.app
 ```
-
-## Controls
-
-- Close (X) on control panel: hides to tray (app keeps running)
-- Tray icon:
-  - Open Control Panel
-  - Hide Control Panel
-  - Quit
-- `Quit App` button in control panel fully exits the app
 
 ## Packaging (PyInstaller)
 
