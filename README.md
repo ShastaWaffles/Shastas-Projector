@@ -54,6 +54,12 @@ For reliable overlays, use **borderless** or **windowed fullscreen** modes.
 
 <img width="390" height="424" alt="image" src="https://github.com/user-attachments/assets/645b9501-daf9-4653-a022-435f9a25fe93" />
 
+<img width="1101" height="689" alt="image" src="https://github.com/user-attachments/assets/c4947851-77bc-44b9-9511-8807e1081605" />
+
+<img width="1597" height="798" alt="image" src="https://github.com/user-attachments/assets/ec5608c8-213b-46e0-b5d6-fcd453f3dc9a" />
+
+
+
 ![Sleepychat Minecraft Overlay Example](screenshots/sleepychat-overlay-example.png)
 
 
